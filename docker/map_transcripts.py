@@ -21,7 +21,7 @@ def main():
         print(f'The specified Baysor output {args.baysor} does not exist!')
         sys.exit(0)
 
-    # Check if output folder already exist.
+    # Check if output folder already exists.
     if os.path.exists(args.out):
         print(f'The specified output folder {args.out} already exists!')
         sys.exit(0)

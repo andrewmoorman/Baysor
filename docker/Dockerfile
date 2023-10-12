@@ -1,46 +1,40 @@
 FROM debian:bullseye
 
-RUN apt-get update && apt-get install -y build-essential zip unzip wget
+ARG BAYSOR_VER=v0.6.2
+LABEL baysor=$BAYSOR_VER
+ARG JULIA_VER=1.8.3
+LABEL julia=$JULIA_VER
+
+RUN apt-get update && apt-get install -y build-essential zip unzip wget git
+RUN mkdir /depot
+ENV JULIA_PATH=/usr/local/julia
+ENV JULIA_DEPOT_PATH=/depot
+ENV JULIA_PROJECT=/baysor
 
 ### Install Julia and add to PATH
 # NOTE: Only successfully tested with Julia <= v1.8.3
-ARG JULIA_VERSION=1.8.3
 RUN wget \
-https://julialang-s3.julialang.org/bin/linux/x64/${JULIA_VERSION%.*}/\
-julia-${JULIA_VERSION}-linux-x86_64.tar.gz -P /root/
-RUN cd root; tar -xzf /root/julia-${JULIA_VERSION}-linux-x86_64.tar.gz
-ENV PATH="$PATH:/root/julia-${JULIA_VERSION}/bin"
-
-# ### Download and Compile Baysor from zip
-# # Download GitHub zip file
-# ARG Baysor='https://github.com/kharchenkolab/Baysor/archive/refs/heads/master.zip'
-# RUN wget ${Baysor}; unzip master.zip -d /root/; cd /root/Baysor-master
-# # Compile Baysor
-# RUN cd /root/Baysor-master; julia -e '\
-# using Pkg; \
-# Pkg.develop(path="/root/Baysor-master/"); \
-# Pkg.build()'
+https://julialang-s3.julialang.org/bin/linux/x64/${JULIA_VER%.*}/\
+julia-${JULIA_VER}-linux-x86_64.tar.gz -P ${JULIA_PATH}
+RUN cd ${JULIA_PATH} && \
+tar -xzf ${JULIA_PATH}/julia-${JULIA_VER}-linux-x86_64.tar.gz
+ENV PATH="$PATH:${JULIA_PATH}/julia-${JULIA_VER}/bin"
 
 ### Compile Baysor
 # NOTE: Only successfully tested with Baysor v0.5.0, v0.6.2
-ARG BAYSOR_VERSION=v0.6.2
-RUN julia -e "\
+ARG REPO=https://github.com/kharchenkolab/Baysor.git
+RUN mkdir ${JULIA_PROJECT} && cd ${JULIA_PROJECT} && \
+git clone --branch ${BAYSOR_VER} ${REPO}
+RUN julia --project=${JULIA_PROJECT}/Baysor -e '\
 using Pkg; \
-Pkg.add(\
-url=\"https://github.com/kharchenkolab/Baysor.git\", \
-rev=\"${BAYSOR_VERSION}\"\
-); \
-import Baysor; \
-Pkg.activate(dirname(dirname(pathof(Baysor)))); \
 Pkg.instantiate(); \
-Pkg.build()"
+Pkg.precompile(); \
+Pkg.build()'
 
-# Add Baysor executable
-RUN echo "export PATH=/root/.julia/bin/:$PATH" >> ~/.bashrc
-RUN echo "alias julia='/usr/local/julia/bin/julia \
---sysimage=/root/.julia/scratchspaces/*/sysimg/libbaysor.so'" \
->> ~/.bashrc
-RUN ln -s /root/.julia/bin/baysor /usr/local/bin/baysor
+RUN chmod 777 -R /depot/
+
+ENV PATH="${JULIA_DEPOT_PATH}/bin:${PATH}"
+
+ENV JULIA_DEPOT_PATH="/tmp/:${JULIA_DEPOT_PATH}"
 
 ENTRYPOINT ["/bin/bash"]
-WORKDIR /root/
